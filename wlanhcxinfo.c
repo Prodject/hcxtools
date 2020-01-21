@@ -9,7 +9,7 @@
 #include <limits.h>
 #include <time.h>
 #include <sys/stat.h>
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(__OpenBSD__)
 #include <libgen.h>
 #else
 #include <stdio_ext.h>
@@ -241,7 +241,7 @@ while(c < hcxrecords)
 
 
 	replaycount = geteapreplaycount(zeigerhcx->eapol);
-	if((replaycount == MYREPLAYCOUNT) && (memcmp(&mynonce, zeigerhcx->nonce_ap, 32) == 0))
+	if(((replaycount == MYREPLAYCOUNT) && (memcmp(&mynonce, zeigerhcx->nonce_ap, 32) == 0)) || ((zeigerhcx->message_pair & 0x10) == 0x10))
 		wldcount++;
 
 	if((memcmp(&nonceold, zeigerhcx->nonce_ap, 28) == 0) && (memcmp(&nonceold, zeigerhcx->nonce_ap, 32) != 0))
@@ -362,21 +362,21 @@ while(c < hcxrecords)
 	if(eapver == 2)
 		xverc2++;
 
-	if((zeigerhcx->message_pair & 0x03) == 0)
+	if((zeigerhcx->message_pair & 0x07) == 0)
 		{
 		mp0c++;
 		if((zeigerhcx->message_pair & 0x80) == 0x80)
 			mp80c++;
 		}
 
-	if((zeigerhcx->message_pair & 0x03) == 1)
+	if((zeigerhcx->message_pair & 0x07) == 1)
 		{
 		mp1c++;
 		if((zeigerhcx->message_pair & 0x80) == 0x80)
 			mp81c++;
 		}
 
-	if((zeigerhcx->message_pair & 0x03) == 2)
+	if((zeigerhcx->message_pair & 0x07) == 2)
 		{
 		mp2c++;
 		if((zeigerhcx->message_pair & 0x80) == 0x80)
@@ -661,7 +661,7 @@ static void usage(char *eigenname)
 {
 printf("%s %s (C) %s ZeroBeat\n"
 	"usage..: %s <options>\n"
-	"example: %s -i <hashfile> show general informations about file\n"
+	"example: %s -i <hashfile> show general information about file\n"
 	"\n"
 	"options:\n"
 	"-i <file> : input hccapx file\n"

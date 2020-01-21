@@ -12,35 +12,41 @@
 #include "pcap.h"
 
 /*===========================================================================*/
-static bool pcapwritehdr(int fd)
+bool pcapwritehdr(int fd, int linklayer)
 {
-static pcap_hdr_t pcap_hdr;
-static int written;
+pcap_hdr_t pcap_hdr;
+int written;
 
 memset(&pcap_hdr, 0, PCAPHDR_SIZE);
 pcap_hdr.magic_number = PCAPMAGICNUMBER;
 pcap_hdr.version_major = PCAP_MAJOR_VER;
 pcap_hdr.version_minor = PCAP_MINOR_VER;
 pcap_hdr.snaplen = PCAP_SNAPLEN;
-pcap_hdr.network = DLT_IEEE802_11_RADIO;
+pcap_hdr.network = linklayer;
 written = write(fd, &pcap_hdr, PCAPHDR_SIZE);
-if(written != PCAPHDR_SIZE)
-	return false;
+if(written != PCAPHDR_SIZE) return false;
 return true;
 }
 /*===========================================================================*/
-int hcxopenpcapdump(char *pcapdumpname)
+int hcxopencapdump(char *capdumpname)
 {
 int fd;
+int c;
+struct stat statinfo;
+char newcapdumpname[PATH_MAX +2];
 
-umask(0);
-fd = open(pcapdumpname, O_WRONLY | O_CREAT, 0644);
-if(fd == -1)
+c = 0;
+strcpy(newcapdumpname, capdumpname);
+while(stat(newcapdumpname, &statinfo) == 0)
 	{
-	return -1;
+	snprintf(newcapdumpname, PATH_MAX, "%s_%d", capdumpname, c);
+	c++;
 	}
 
-if(pcapwritehdr(fd) == false)
+umask(0);
+fd = open(newcapdumpname, O_WRONLY | O_CREAT, 0644);
+if(fd == -1) return -1;
+if(pcapwritehdr(fd, DLT_IEEE802_11) == false)
 	{
 	close(fd);
 	return 0;
@@ -48,5 +54,3 @@ if(pcapwritehdr(fd) == false)
 return fd;
 }
 /*===========================================================================*/
-
-

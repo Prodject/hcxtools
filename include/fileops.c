@@ -44,20 +44,22 @@ else
 return;
 }
 /*===========================================================================*/
-void fwriteaddr1addr2(uint8_t *mac1, uint8_t *mac2, FILE *fhd)
+void fwriteaddr1(uint8_t *macw, FILE *fhd)
 {
 int p;
 
 for(p = 0; p< 6; p++)
 	{
-	fprintf(fhd, "%02x", mac1[p]);
+	fprintf(fhd, "%02x", macw[p]);
 	}
 fprintf(fhd, ":");
-for(p = 0; p< 6; p++)
-	{
-	fprintf(fhd, "%02x", mac2[p]);
-	}
-fprintf(fhd, ":");
+return;
+}
+/*===========================================================================*/
+void fwriteaddr1addr2(uint8_t *mac1, uint8_t *mac2, FILE *fhd)
+{
+fwriteaddr1(mac1, fhd);
+fwriteaddr1(mac2, fhd);
 return;
 }
 /*===========================================================================*/
@@ -83,6 +85,35 @@ return;
 }
 /*===========================================================================*/
 void fwriteessidstr(uint8_t len, unsigned char *essidstr, FILE *fhd)
+{
+int p;
+
+if((len == 0) || (len > ESSID_LEN_MAX))
+	{
+	return;
+	}
+if(essidstr[0] == 0)
+	{
+	return;
+	}
+if(isasciistring(len, essidstr) != false)
+	{
+	fwrite(essidstr, len, 1, fhd);
+	fprintf(fhd, "\n");
+	}
+else
+	{
+	fprintf(fhd, "$HEX[");
+	for(p = 0; p < len; p++)
+		{
+		fprintf(fhd, "%02x", essidstr[p]);
+		}
+	fprintf(fhd, "]\n");
+	}
+return;
+}
+/*===========================================================================*/
+void fwritestring(uint8_t len, unsigned char *essidstr, FILE *fhd)
 {
 int p;
 

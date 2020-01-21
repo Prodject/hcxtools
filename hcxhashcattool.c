@@ -10,7 +10,7 @@
 #include <signal.h>
 #include <stdbool.h>
 #include <sys/stat.h>
-#ifdef __APPLE__
+#if defined (__APPLE__) || defined(__OpenBSD__)
 #include <libgen.h>
 #else
 #include <stdio_ext.h>
@@ -44,14 +44,40 @@ if((signum == SIGINT) || (signum == SIGTERM) || (signum == SIGKILL))
 	}
 return;
 }
+
+/*===========================================================================*/
+static int sort_pmklist_by_essid(const void *a, const void *b)
+{
+const pmklist_t *ia = (const pmklist_t *)a;
+const pmklist_t *ib = (const pmklist_t *)b;
+
+if(ia->essidlen > ib->essidlen)
+	{
+	return 1;
+	}
+else if(ia->essidlen < ib->essidlen)
+	{
+	return -1;
+	}
+if(memcmp(ia->essid, ib->essid, ia->essidlen) > 0)
+	{
+	return 1;
+	}
+else if(memcmp(ia->essid, ib->essid, ia->essidlen) < 0)
+	{
+	return -1;
+	}
+return 0;
+}
 /*===========================================================================*/
 void writenewpmkfile(char *pmkname)
 {
 pmklist_t *zeiger;
 unsigned long long int c;
-int d;
+int d, p;
 FILE *fhpmk;
 
+qsort(pmkliste, pmkcount, PMKLIST_SIZE, sort_pmklist_by_essid);
 if((fhpmk = fopen(pmkname, "w")) == NULL)
 	{
 	return;
@@ -64,18 +90,9 @@ for(c = 0; c < pmkcount; c++)
 		fprintf(fhpmk, "%02x", zeiger->pmk[d]);
 		}
 	fprintf(fhpmk, ":");
-	if(zeiger->essidflag == false)
+	for(p = 0; p < zeiger->essidlen; p++)
 		{
-		fprintf(fhpmk, "%.*s", zeiger->essidlen, zeiger->essid);
-		}
-	else
-		{
-		fprintf(fhpmk, "$HEX[");
-		for(d = 0; d < zeiger->essidlen; d++)
-			{
-			fprintf(fhpmk, "%02x", zeiger->essid[d]);
-			}
-		fprintf(fhpmk, "]");
+		fprintf(fhpmk, "%02x",zeiger->essid[p]);
 		}
 	fprintf(fhpmk, ":");
 	if(zeiger->pskflag == false)
@@ -113,7 +130,7 @@ for(c = 0; c < pmkcountthread; c++)
 	{
 	if(memcmp(&emptypmk, zeiger->pmk, 32) == 0)
 		{
-		if(PKCS5_PBKDF2_HMAC((const char*)zeiger->psk, zeiger->psklen, (unsigned char*)zeiger->essid, zeiger->essidlen, 4096, EVP_sha1(), 32, zeiger->pmk) == 0)
+		if(PKCS5_PBKDF2_HMAC_SHA1((const char*)zeiger->psk, zeiger->psklen, (unsigned char*)zeiger->essid, zeiger->essidlen, 4096, 32, zeiger->pmk) == 0)
 			{
 			printf("failed to calculate PMK\n");
 			exit(EXIT_FAILURE);
@@ -173,7 +190,7 @@ if(ct > 0)
 		{
 		if(memcmp(&emptypmk, zeiger->pmk, 32) == 0)
 			{
-			if(PKCS5_PBKDF2_HMAC((const char*)zeiger->psk, zeiger->psklen, (unsigned char*)zeiger->essid, zeiger->essidlen, 4096, EVP_sha1(), 32, zeiger->pmk) == 0)
+			if(PKCS5_PBKDF2_HMAC_SHA1((const char*)zeiger->psk, zeiger->psklen, (unsigned char*)zeiger->essid, zeiger->essidlen, 4096, 32, zeiger->pmk) == 0)
 				{
 				printf("failed to calculate PMK\n");
 				exit(EXIT_FAILURE);
@@ -253,7 +270,7 @@ memset(&pmktmp, 0, PMKLIST_SIZE);
 
 if(potlinelen < 59)
 	{
-	printf("line lenth exception: %s\n", potline);
+	printf("line length exception: %s\n", potline);
 	return;
 	}
 if((potline[32] != ':') && (potline[32]  != '*'))
@@ -395,29 +412,23 @@ if(psk_ptr == NULL)
 	return;
 	}
 
+essidlen = psk_ptr -essid_ptr;
+if((essidlen %2) != 0)
+	{
+	return;
+	}
+if(essidlen > 64)
+	{
+	return;
+	}
 psk_ptr[0] = 0;
 psk_ptr++;
 
-essidlen = ishexify(essid_ptr);
-if((essidlen > 0) && (essidlen <= 32))
+if(hex2bin(essid_ptr, pmktmp.essid, essidlen) == false)
 	{
-	if(hex2bin(essid_ptr +5, pmktmp.essid, essidlen) == false)
-		{
-		return;
-		}
-	pmktmp.essidflag = true;
+	return;
 	}
-else
-	{
-	essidlen = strlen(essid_ptr);
-	if((essidlen < 1) || (essidlen > 32))
-		{
-		return;
-		}
-	memcpy(&pmktmp.essid, essid_ptr, essidlen);
-	pmktmp.essidflag = false;
-	}
-pmktmp.essidlen = essidlen;
+pmktmp.essidlen = essidlen /2;
 
 psklen = ishexify(psk_ptr);
 if((psklen > 0) && (psklen <= 63))
@@ -557,9 +568,9 @@ printf("%s %s (C) %s ZeroBeat\n"
 	"%s <options>\n"
 	"\n"
 	"options:\n"
-	"-p <file> : input hashcat potfile\n"
+	"-p <file> : input old hashcat potfile (<= 5.1.0)\n"
 	"            accepted potfiles: 2500 or 16800\n"
-	"-P <file> : output PMK file (PMK:ESSID:PSK)\n"
+	"-P <file> : output new potfile file (PMK:ESSID:PSK)\n"
 	"-h        : show this help\n"
 	"-v        : show version\n"
 	"\n", eigenname, VERSION, VERSION_JAHR, eigenname);
@@ -606,6 +617,12 @@ while ((auswahl = getopt(argc, argv, "p:P:hv")) != -1)
 		usageerror(basename(argv[0]));
 		break;
 		}
+	}
+
+if(argc < 2)
+	{
+	fprintf(stderr, "no option selected\n");
+	return EXIT_SUCCESS;
 	}
 
 if((potname != NULL) && (pmkname != NULL))

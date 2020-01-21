@@ -1,13 +1,30 @@
+#define ESSID_LEN_MAX 32
+#define LEAP_LEN_MAX 0x0ff
+
+#define NMEA_MAX 256
+
+#ifdef __BYTE_ORDER__
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+#define BIG_ENDIAN_HOST
+#endif
+#else
+#ifdef __OpenBSD__
+# include <endian.h>
+# if BYTE_ORDER == BIG_ENDIAN
+#   define BIG_ENDIAN_HOST
+# endif
+#endif
+#endif
 /*===========================================================================*/
 struct apstaessidlist_s
 {
+ int		essidcount;
  uint32_t	tv_sec;
  uint32_t	tv_usec;
- uint8_t	status;
  uint8_t	mac_ap[6];
  uint8_t	mac_sta[6];
  uint8_t	essidlen;
- uint8_t	essid[32];
+ uint8_t	essid[ESSID_LEN_MAX];
 } __attribute__((__packed__));
 typedef struct apstaessidlist_s apstaessidl_t;
 #define	APSTAESSIDLIST_SIZE (sizeof(apstaessidl_t))
@@ -53,6 +70,25 @@ else if(memcmp(ia->mac_ap, ib->mac_ap, 6) < 0)
 if(memcmp(ia->mac_sta, ib->mac_sta, 6) > 0)
 	return 1;
 else if(memcmp(ia->mac_sta, ib->mac_sta, 6) < 0)
+	return -1;
+if(memcmp(ia->essid, ib->essid, 32) > 0)
+	return 1;
+else if(memcmp(ia->essid, ib->essid, 32) < 0)
+	return -1;
+return 0;
+}
+/*===========================================================================*/
+static int sort_apstaessidlist_by_ap_count_essid(const void *a, const void *b)
+{
+const apstaessidl_t *ia = (const apstaessidl_t *)a;
+const apstaessidl_t *ib = (const apstaessidl_t *)b;
+if(memcmp(ia->mac_ap, ib->mac_ap, 6) > 0)
+	return 1;
+else if(memcmp(ia->mac_ap, ib->mac_ap, 6) < 0)
+	return -1;
+if(ia->essidcount < ib->essidcount)
+	return 1;
+else if(ia->essidcount > ib->essidcount)
 	return -1;
 if(memcmp(ia->essid, ib->essid, 32) > 0)
 	return 1;
@@ -110,10 +146,10 @@ struct hcxtoollist_s
  uint64_t	replaycount_sta;
  uint8_t	endianess;
  uint8_t	nonce[32];
- uint8_t	authlen;
+ uint16_t	authlen;
  uint8_t	eapol[256];
  uint8_t	essidlen;
- uint8_t	essid[32];
+ uint8_t	essid[ESSID_LEN_MAX];
 } __attribute__((__packed__));
 typedef struct hcxtoollist_s hcxl_t;
 #define	HCXLIST_SIZE (sizeof(hcxl_t))
@@ -123,9 +159,9 @@ struct leaplist_s
  uint8_t	code;
  uint8_t	id;
  uint8_t	len;
- uint8_t	data[0xff];
+ uint8_t	data[LEAP_LEN_MAX];
  uint16_t	username_len;
- uint8_t	username[0xff];
+ uint8_t	username[LEAP_LEN_MAX];
 } __attribute__((__packed__));
 typedef struct leaplist_s leapl_t;
 #define	LEAPLIST_SIZE (sizeof(leapl_t))

@@ -11,7 +11,7 @@
 #include <pwd.h>
 #include <sys/stat.h>
 #include <arpa/inet.h>
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(__OpenBSD__)
 #include <libgen.h>
 #include <sys/types.h> /* This in turn sources machine/endian.h */
 #else
@@ -67,8 +67,8 @@ return len;
 /*===========================================================================*/
 static uint8_t geteapkey(uint8_t *eapdata)
 {
-eap_t *eap;
-uint16_t keyinfo;
+static eap_t *eap;
+static uint16_t keyinfo;
 int eapkey = 0;
 
 eap = (eap_t*)(uint8_t*)(eapdata);
@@ -640,9 +640,8 @@ while(c < hcxrecords)
 	{
 	zeigerhcx = hcxdata +c;
 	r = getreplaycount(zeigerhcx->eapol);
-	if((memcmp(&mynonce, zeigerhcx->nonce_ap, 32) != 0) && (r != MYREPLAYCOUNT))
+	if(((memcmp(&mynonce, zeigerhcx->nonce_ap, 32) != 0) && (r != MYREPLAYCOUNT)) ||((zeigerhcx->message_pair & 0x10) != 0x10))
 		{
-
 		if((fhhcx = fopen(wlandumpforcedname, "ab")) == NULL)
 			{
 			fprintf(stderr, "error opening file %s", wlandumpforcedname);
@@ -671,7 +670,7 @@ while(c < hcxrecords)
 	{
 	zeigerhcx = hcxdata +c;
 	r = getreplaycount(zeigerhcx->eapol);
-	if((memcmp(&mynonce, zeigerhcx->nonce_ap, 32) == 0) && (r == MYREPLAYCOUNT))
+	if(((memcmp(&mynonce, zeigerhcx->nonce_ap, 32) == 0) && (r == MYREPLAYCOUNT)) || ((zeigerhcx->message_pair & 0x10) == 0x10))
 		{
 		if((fhhcx = fopen(wlandumpforcedname, "ab")) == NULL)
 			{
@@ -828,27 +827,50 @@ int len;
 uid_t uid;
 struct passwd *pwd;
 FILE* fhoui;
+struct stat statinfo;
 unsigned long long int vendoroui;
 
-const char ouiname[] = "/.hcxtools/oui.txt";
+char *ouiname = NULL;
+char *ouinameuser = "/.hcxtools/oui.txt";
+char *ouinamesystemwide = "/usr/share/ieee-data/oui.txt";
 
-char ouipathname[PATH_MAX +1];
+char ouinameuserpath[PATH_MAX +2];
 char linein[256];
 
 uid = getuid();
 pwd = getpwuid(uid);
-if (pwd == NULL)
+if(pwd == NULL)
 	{
-	fprintf(stdout, "failed to get home dir\n");
+	fprintf(stderr, "failed to get home dir\n");
+	exit(EXIT_FAILURE);
+	}
+snprintf(ouinameuserpath, PATH_MAX, "%s%s", pwd->pw_dir, ouinameuser);
+if(stat(ouinamesystemwide, &statinfo) == 0)
+	{
+	ouiname = ouinamesystemwide;
+	fprintf(stdout, "using systemwide %s\n", ouiname);
+	}
+if(stat(ouinameuserpath, &statinfo) == 0)
+	{
+	ouiname = ouinameuserpath;
+	fprintf(stdout, "using user defined %s\n", ouiname);
+	}
+if(ouiname == NULL)
+	{
+	fprintf(stderr, "failed read oui.txt\n"
+			"run whoismac -d to download oui.txt\n");
+	exit(EXIT_FAILURE);
+	}
+if(stat(ouiname, &statinfo) < 0)
+	{
+	fprintf(stderr, "failed read oui.txt\n"
+			"run whoismac -d to download oui.txt\n");
 	exit(EXIT_FAILURE);
 	}
 
-strcpy(ouipathname, pwd->pw_dir);
-strcat(ouipathname, ouiname);
-
-if ((fhoui = fopen(ouipathname, "r")) == NULL)
+if((fhoui = fopen(ouiname, "r")) == NULL)
 	{
-	fprintf(stderr, "unable to open database %s\n", ouipathname);
+	fprintf(stderr, "unable to open database %s\n", ouiname);
 	exit (EXIT_FAILURE);
 	}
 

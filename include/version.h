@@ -1,2 +1,2 @@
-#define VERSION "4.2.1"
-#define VERSION_JAHR "2018"
+#define VERSION "6.0.0"
+#define VERSION_JAHR "2020"

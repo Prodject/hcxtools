@@ -1,6 +1,5 @@
-
 /*===========================================================================*/
-static void hccap2base(FILE *fhjohn, unsigned char *in, unsigned char b)
+void hccap2base(FILE *fhjohn, unsigned char *in, unsigned char b)
 {
 const char itoa64[64] = "./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
@@ -16,19 +15,19 @@ else
 return;
 }
 /*===========================================================================*/
-static void mac2asciilong(char ssid[18], unsigned char *p)
+void mac2asciilong(char ssid[18], unsigned char *p)
 {
 sprintf(ssid, "%02x-%02x-%02x-%02x-%02x-%02x",p[0],p[1],p[2],p[3],p[4],p[5]);
 return;
 }
 /*===========================================================================*/
-static void mac2ascii(char ssid[13], unsigned char *p)
+void mac2ascii(char ssid[13], unsigned char *p)
 {
 sprintf(ssid, "%02x%02x%02x%02x%02x%02x",p[0],p[1],p[2],p[3],p[4],p[5]);
 return;
 }
 /*===========================================================================*/
-static void writejohnrecord(unsigned long long int noncefuzz, hcxl_t *zeiger, FILE *fhjohn, char *basename)
+void writejohnrecord(unsigned long long int noncefuzz, hcxl_t *zeiger, FILE *fhjohn, char *basename)
 {
 hccap_t hccap;
 wpakey_t *wpak, *wpak2;
@@ -53,6 +52,14 @@ else if((zeiger->keyinfo_ap == 2) && (zeiger->keyinfo_sta == 4))
 	{
 	message_pair = MESSAGE_PAIR_M32E2;
 	if(zeiger->replaycount_ap != zeiger->replaycount_sta +1)
+		{
+		message_pair |= 0x80;
+		}
+	}
+else if((zeiger->keyinfo_ap == 16) && (zeiger->keyinfo_sta == 2))
+	{
+	message_pair = MESSAGE_PAIR_M32E3;
+	if(zeiger->replaycount_ap -1 != zeiger->replaycount_sta)
 		{
 		message_pair |= 0x80;
 		}
@@ -83,23 +90,33 @@ else if((zeiger->keyinfo_ap >= 1) && (zeiger->keyinfo_sta == 8))
 	}
 
 hcpos = (unsigned char*)&hccap;
-
 memset (&hccap, 0, sizeof(hccap_t));
 wpak = (wpakey_t*)(zeiger->eapol +EAPAUTH_SIZE);
 memcpy(&hccap.essid, zeiger->essid, 32);
 memcpy(&hccap.mac1, zeiger->mac_ap, 6);
 memcpy(&hccap.mac2, zeiger->mac_sta, 6);
-memcpy(&hccap.nonce1, wpak->nonce, 32);
-memcpy(&hccap.nonce2, zeiger->nonce, 32);
-
+if(zeiger->keyinfo_ap == 16)
+	{
+	memcpy(&hccap.nonce1, zeiger->nonce, 32);
+	memcpy(&hccap.nonce2, wpak->nonce, 32);
+	}
+else
+	{
+	memcpy(&hccap.nonce1, wpak->nonce, 32);
+	memcpy(&hccap.nonce2, zeiger->nonce, 32);
+	}
 hccap.eapol_size = zeiger->authlen;
 memcpy(&hccap.eapol, zeiger->eapol, zeiger->authlen);
 memcpy(&hccap.keymic, wpak->keymic, 16);
 wpak2 = (wpakey_t*)(hccap.eapol +EAPAUTH_SIZE);
 memset(wpak2->keymic, 0, 16);
 hccap.keyver = ntohs(wpak->keyinfo) & WPA_KEY_INFO_TYPE_MASK;
+if(hccap.keyver == 0)
+	{
+	hccap.keyver = 3;
+	}
  #ifdef BIG_ENDIAN_HOST
-hccap.eapolsize	= byte_swap_16(hccap.eapolsize);
+hccap.eapol_size	= byte_swap_16(hccap.eapol_size);
 #endif
 
 mac2ascii(ap_mac_long, zeiger->mac_ap);
